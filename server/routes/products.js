@@ -2,8 +2,10 @@ import express from 'express';
 import Product from '../models/Product.js';
 import auth from '../middleware/auth.js';
 import { scrapeProductPrice } from '../utils/scraper.js';
+import { Ollama } from 'ollama';
 
 const router = express.Router();
+const ollama = new Ollama({ host: 'http://localhost:11434' });
 
 // Get all products for user
 router.get('/', auth, async (req, res) => {
@@ -391,6 +393,104 @@ router.get('/:id/summary', auth, async (req, res) => {
   } catch (error) {
     console.error('Summary generation error:', error);
     res.status(500).json({ message: 'Server error generating summary' });
+  }
+});
+
+// AI Strategic Action endpoint using RAG
+router.post('/:id/ai-action', auth, async (req, res) => {
+  try {
+    console.log('AI Strategic Action requested for product ID:', req.params.id);
+    
+    const product = await Product.findOne({ _id: req.params.id, userId: req.userId });
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    console.log(`Generating AI action for: ${product.title}`);
+    
+    // Generate weekly summary for RAG context
+    const weeklySummary = generateWeeklySummary(product.priceHistory, product.title, product.platform);
+    const ragContext = generateRAGContext(weeklySummary, product.title, product.platform, product.currentPrice);
+    
+    // Get price change info from request
+    const { oldPrice, newPrice } = req.body;
+    const priceChange = newPrice - oldPrice;
+    const priceChangePercent = ((priceChange / oldPrice) * 100).toFixed(2);
+    const changeType = priceChange < 0 ? 'decreased' : 'increased';
+    
+    // Create prompt for Ollama
+    const prompt = `You are a competitive pricing strategist for e-commerce sellers. A seller is monitoring their competitor's product price changes to protect their market position and prevent losses.
+
+COMPETITOR PRICE CHANGE DETECTED:
+- Competitor Product: ${product.title}
+- Platform: ${product.platform}
+- Previous Price: ₹${oldPrice}
+- New Price: ₹${newPrice}
+- Change: ₹${priceChange} (${priceChangePercent}%)
+- Status: Competitor ${changeType} their price
+
+COMPETITOR'S 180-DAY PRICE HISTORY (RAG DATA):
+${ragContext}
+
+YOUR ROLE:
+As a seller tracking this competitor, analyze their pricing strategy and provide actionable recommendations to protect your business and prevent losses.
+
+PROVIDE STRATEGIC ANALYSIS:
+
+1. **🚨 Immediate Action**: What should the seller do RIGHT NOW to respond to this competitor move?
+
+2. **📊 Competitive Analysis**: What is the competitor's pricing strategy? Are they aggressive, defensive, or following seasonal patterns?
+
+3. **💰 Pricing Strategy**: Should the seller:
+   - Match this price?
+   - Undercut the competitor?
+   - Maintain current pricing?
+   - Adjust by how much?
+
+4. **⚠️ Risk Assessment**: 
+   - What happens if the seller doesn't respond?
+   - What are the risks of matching/undercutting?
+   - Potential profit loss scenarios
+
+5. **🔮 Competitor Prediction**: Based on 180-day history, what will the competitor likely do next?
+
+6. **✅ Action Plan**: Clear step-by-step recommendations to protect market share and minimize losses.
+
+Keep your response focused on SELLER ACTIONS to compete effectively. Be specific with pricing recommendations.`;
+
+    console.log('Sending request to Ollama...');
+    
+    // Stream response from Ollama
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    try {
+      const stream = await ollama.chat({
+        model: 'llama3.2',
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        if (chunk.message && chunk.message.content) {
+          res.write(`data: ${JSON.stringify({ content: chunk.message.content })}\n\n`);
+        }
+      }
+      
+      res.write('data: [DONE]\n\n');
+      res.end();
+      console.log('AI response streaming completed');
+    } catch (ollamaError) {
+      console.error('Ollama error:', ollamaError);
+      res.write(`data: ${JSON.stringify({ error: 'Ollama service unavailable. Please ensure Ollama is running with llama3.2 model.' })}\n\n`);
+      res.end();
+    }
+    
+  } catch (error) {
+    console.error('AI action generation error:', error);
+    res.status(500).json({ message: 'Server error generating AI action' });
   }
 });
 

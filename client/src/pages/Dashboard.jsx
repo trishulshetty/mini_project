@@ -12,7 +12,9 @@ import {
   ExternalLink,
   Loader,
   Download,
-  FileText
+  FileText,
+  Sparkles,
+  X
 } from 'lucide-react';
 import './Dashboard.css';
 
@@ -26,6 +28,10 @@ const Dashboard = () => {
   const [success, setSuccess] = useState('');
   const [refreshingId, setRefreshingId] = useState(null);
   const [priceAlerts, setPriceAlerts] = useState({}); // Track persistent price drop alerts per product
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   const ALERT_STORAGE_KEY = 'priceAlerts';
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -168,6 +174,67 @@ const Dashboard = () => {
       }
       return next;
     });
+  };
+
+  const handleAIAction = async (product, priceAlert) => {
+    setSelectedProduct(product);
+    setAiModalOpen(true);
+    setAiResponse('');
+    setAiLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/products/${product._id}/ai-action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          oldPrice: priceAlert.oldPrice,
+          newPrice: priceAlert.newPrice
+        })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              setAiLoading(false);
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                fullResponse += parsed.content;
+                setAiResponse(fullResponse);
+              }
+              if (parsed.error) {
+                setAiResponse(parsed.error);
+                setAiLoading(false);
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AI action error:', error);
+      setAiResponse('Error: Could not connect to AI service. Please ensure the server is running.');
+      setAiLoading(false);
+    }
   };
 
   const handleRefreshPrice = async (productId) => {
@@ -316,15 +383,15 @@ const Dashboard = () => {
         <div className="container">
           <div className="dashboard-header">
             <div>
-              <h1>My Products</h1>
-              <p>Track prices across multiple e-commerce platforms</p>
+              <h1>Competitor Tracking</h1>
+              <p>Monitor competitor prices to protect your business and prevent losses</p>
             </div>
             <div className="stats">
               <div className="stat-card">
                 <Package size={24} color="#667eea" />
                 <div>
                   <div className="stat-value">{products.length}</div>
-                  <div className="stat-label">Products Tracked</div>
+                  <div className="stat-label">Competitors Tracked</div>
                 </div>
               </div>
             </div>
@@ -345,13 +412,13 @@ const Dashboard = () => {
           <div className="add-product-section card">
             <h3>
               <Plus size={24} />
-              Add New Product
+              Add Competitor Product
             </h3>
             <form onSubmit={handleAddProduct} className="add-product-form">
               <input
                 type="url"
                 className="input"
-                placeholder="Paste product URL (Amazon, eBay, Walmart, etc.)"
+                placeholder="Paste competitor's product URL to track their pricing"
                 value={productUrl}
                 onChange={(e) => setProductUrl(e.target.value)}
                 required
@@ -369,7 +436,7 @@ const Dashboard = () => {
                 ) : (
                   <>
                     <Plus size={20} />
-                    Add Product
+                    Track Competitor
                   </>
                 )}
               </button>
@@ -384,8 +451,8 @@ const Dashboard = () => {
           ) : products.length === 0 ? (
             <div className="empty-state">
               <Package size={64} color="#9ca3af" />
-              <h3>No products yet</h3>
-              <p>Add your first product to start tracking prices</p>
+              <h3>No competitors tracked yet</h3>
+              <p>Add your first competitor product to start monitoring their pricing strategy</p>
             </div>
           ) : (
             <div className="products-grid">
@@ -416,7 +483,7 @@ const Dashboard = () => {
                       <div className="price-alert">
                         <span className="alert-icon">🔔</span>
                         <div className="alert-content">
-                          <strong>{priceAlert.newPrice < priceAlert.oldPrice ? 'Price Dropped!' : 'Price Increased'}</strong>
+                          <strong>{priceAlert.newPrice < priceAlert.oldPrice ? 'Competitor Dropped Price!' : 'Competitor Raised Price!'}</strong>
                           <div className="price-comparison">
                             <span className="old-price">{formatPrice(priceAlert.oldPrice, product.currency)}</span>
                             <span className="arrow">→</span>
@@ -424,20 +491,15 @@ const Dashboard = () => {
                               {formatPrice(priceAlert.newPrice, product.currency)}
                             </span>
                           </div>
-                          {(
-                            <div className="alert-actions">
-                              <a
-                                className="action-button"
-                                href={product.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Open product to purchase or take action"
-                                onClick={() => acknowledgeAlert(product._id)}
-                              >
-                                Take Action <ExternalLink size={14} />
-                              </a>
-                            </div>
-                          )}
+                          <div className="alert-actions">
+                            <button
+                              className="action-button ai-action-button"
+                              onClick={() => handleAIAction(product, priceAlert)}
+                              title="Get AI competitive strategy to protect your business"
+                            >
+                              <Sparkles size={14} /> Take Action
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -517,6 +579,88 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+
+      {/* AI Strategic Action Modal */}
+      {aiModalOpen && (
+        <div className="modal-overlay" onClick={() => setAiModalOpen(false)}>
+          <div className="modal-content ai-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <Sparkles size={24} color="#667eea" />
+                <h2>Competitive Strategy Analysis</h2>
+              </div>
+              <button 
+                className="modal-close" 
+                onClick={() => setAiModalOpen(false)}
+                aria-label="Close modal"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {selectedProduct && (
+              <div className="modal-product-info">
+                <h3>Competitor: {selectedProduct.title}</h3>
+                <span className="platform-badge">{selectedProduct.platform}</span>
+              </div>
+            )}
+            
+            <div className="rag-indicator">
+              <div className="rag-badge">
+                <FileText size={16} />
+                <span>Analyzing 180-day price history with RAG system</span>
+              </div>
+            </div>
+            
+            <div className="modal-body">
+              {aiLoading && (
+                <div className="ai-loading">
+                  <Loader size={32} className="spinning" />
+                  <p>🔍 Loading competitor's 180-day price summary...</p>
+                  <p className="rag-status">📊 RAG system processing historical data...</p>
+                  <p className="rag-status">🤖 AI analyzing competitive strategy...</p>
+                </div>
+              )}
+              
+              {aiResponse && (
+                <div className="ai-response">
+                  <div className="response-content">
+                    {aiResponse.split('\n').map((line, index) => (
+                      <p key={index}>{line}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {!aiLoading && !aiResponse && (
+                <div className="ai-waiting">
+                  <p>Waiting for AI response...</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setAiModalOpen(false)}
+              >
+                Close
+              </button>
+              {selectedProduct && (
+                <a
+                  href={selectedProduct.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary"
+                >
+                  <ExternalLink size={18} />
+                  View Competitor Product
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
