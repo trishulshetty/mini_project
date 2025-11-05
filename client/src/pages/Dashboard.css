@@ -359,6 +359,33 @@
   font-weight: 600;
 }
 
+/* Actions for price alert */
+.alert-actions {
+  margin-top: 10px;
+}
+
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 2px solid #34d399;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+  transition: transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.action-button:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.35);
+}
+
 .old-price {
   color: #6b7280;
   text-decoration: line-through;

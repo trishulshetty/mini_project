@@ -25,11 +25,45 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [refreshingId, setRefreshingId] = useState(null);
-  const [priceAlerts, setPriceAlerts] = useState({}); // Track price changes per product
+  const [priceAlerts, setPriceAlerts] = useState({}); // Track persistent price drop alerts per product
+
+  const ALERT_STORAGE_KEY = 'priceAlerts';
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  const isExpired = (alert) => {
+    if (!alert || !alert.firstDetectedAt) return true;
+    return Date.now() - alert.firstDetectedAt > ONE_DAY_MS;
+  };
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Load persisted alerts from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ALERT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) || {};
+        // prune expired
+        const pruned = Object.fromEntries(
+          Object.entries(parsed).filter(([, a]) => a && a.firstDetectedAt && Date.now() - a.firstDetectedAt <= ONE_DAY_MS && !a.acknowledged)
+        );
+        setPriceAlerts(pruned);
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, []);
+
+  // Persist alerts to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(priceAlerts));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [priceAlerts]);
 
   // Auto-refresh for JharkhandEcom products every 5 seconds
   useEffect(() => {
@@ -82,31 +116,58 @@ const Dashboard = () => {
       const response = await axios.put(`/api/products/${productId}/refresh`);
       const newProduct = response.data;
       
-      // Check if price changed
-      if (newProduct.currentPrice !== oldPrice) {
-        setPriceAlerts(prev => ({
-          ...prev,
-          [productId]: {
-            oldPrice: oldPrice,
-            newPrice: newProduct.currentPrice,
-            timestamp: Date.now()
+      // Manage persistent price-change alerts (drop or increase)
+      setPriceAlerts(prev => {
+        const existing = prev[productId];
+        const expired = existing ? isExpired(existing) : true;
+        const next = { ...prev };
+
+        if (newProduct.currentPrice !== oldPrice) {
+          // Price changed this cycle (drop or increase)
+          if (!existing || existing.acknowledged || expired) {
+            // Start a new alert window
+            next[productId] = {
+              oldPrice: oldPrice,
+              newPrice: newProduct.currentPrice,
+              firstDetectedAt: Date.now(),
+              acknowledged: false
+            };
+          } else {
+            // Keep old baseline, update the latest new price
+            next[productId] = {
+              ...existing,
+              newPrice: newProduct.currentPrice
+            };
           }
-        }));
-        
-        // Clear alert after 10 seconds
-        setTimeout(() => {
-          setPriceAlerts(prev => {
-            const updated = { ...prev };
-            delete updated[productId];
-            return updated;
-          });
-        }, 10000);
-      }
+        } else {
+          // No change this cycle. Keep showing existing unacknowledged, unexpired alert.
+          if (existing) {
+            if (existing.acknowledged || isExpired(existing)) {
+              delete next[productId];
+            } else {
+              // Keep as-is
+              next[productId] = existing;
+            }
+          }
+        }
+
+        return next;
+      });
       
       setProducts(products.map(p => p._id === productId ? newProduct : p));
     } catch (error) {
       console.error('Auto-refresh error:', error);
     }
+  };
+
+  const acknowledgeAlert = (productId) => {
+    setPriceAlerts(prev => {
+      const next = { ...prev };
+      if (next[productId]) {
+        next[productId] = { ...next[productId], acknowledged: true };
+      }
+      return next;
+    });
   };
 
   const handleRefreshPrice = async (productId) => {
@@ -330,10 +391,11 @@ const Dashboard = () => {
             <div className="products-grid">
               {products.map((product) => {
                 const priceAlert = priceAlerts[product._id];
+                const showAlert = priceAlert && !priceAlert.acknowledged && !isExpired(priceAlert);
                 const isJharkhandEcom = product.platform === 'JharkhandEcom';
                 
                 return (
-                <div key={product._id} className={`product-card card ${priceAlert ? 'price-changed' : ''}`}>
+                <div key={product._id} className={`product-card card ${showAlert ? 'price-changed' : ''}`}>
                   {product.imageUrl && (
                     <div className="product-image">
                       <img src={product.imageUrl} alt={product.title} />
@@ -350,11 +412,11 @@ const Dashboard = () => {
                       <h3 className="product-title">{product.title}</h3>
                     </div>
                     
-                    {priceAlert && (
+                    {showAlert && (
                       <div className="price-alert">
                         <span className="alert-icon">🔔</span>
                         <div className="alert-content">
-                          <strong>Price Changed!</strong>
+                          <strong>{priceAlert.newPrice < priceAlert.oldPrice ? 'Price Dropped!' : 'Price Increased'}</strong>
                           <div className="price-comparison">
                             <span className="old-price">{formatPrice(priceAlert.oldPrice, product.currency)}</span>
                             <span className="arrow">→</span>
@@ -362,6 +424,20 @@ const Dashboard = () => {
                               {formatPrice(priceAlert.newPrice, product.currency)}
                             </span>
                           </div>
+                          {(
+                            <div className="alert-actions">
+                              <a
+                                className="action-button"
+                                href={product.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open product to purchase or take action"
+                                onClick={() => acknowledgeAlert(product._id)}
+                              >
+                                Take Action <ExternalLink size={14} />
+                              </a>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
