@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Mail, Lock, TrendingDown } from 'lucide-react';
 import './Auth.css';
 
 const Login = () => {
@@ -33,7 +32,7 @@ const Login = () => {
       <div className="auth-card fade-in">
         <div className="auth-header">
           <div className="logo">
-            <TrendingDown size={40} color="#667eea" />
+            {/* logo placeholder */}
           </div>
           <h1>Welcome Back</h1>
           <p>Sign in to track your product prices</p>
@@ -48,7 +47,6 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
             <label className="label">
-              <Mail size={18} />
               Email Address
             </label>
             <input
@@ -63,7 +61,6 @@ const Login = () => {
 
           <div className="form-group">
             <label className="label">
-              <Lock size={18} />
               Password
             </label>
             <input
@@ -81,7 +78,6 @@ const Login = () => {
               <div className="spinner-small"></div>
             ) : (
               <>
-                <LogIn size={20} />
                 Sign In
               </>
             )}

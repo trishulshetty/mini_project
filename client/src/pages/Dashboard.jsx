@@ -1,21 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-import { 
-  LogOut, 
-  Plus, 
-  RefreshCw, 
-  Trash2, 
-  TrendingDown, 
-  Package,
-  IndianRupee,
-  ExternalLink,
-  Loader,
-  Download,
-  FileText,
-  Sparkles,
-  X
-} from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -366,13 +351,11 @@ const Dashboard = () => {
       <nav className="navbar">
         <div className="container nav-content">
           <div className="nav-brand">
-            <TrendingDown size={32} color="#667eea" />
             <h2>Price Tracker</h2>
           </div>
           <div className="nav-user">
             <span>Welcome, {user?.name}!</span>
             <button onClick={logout} className="btn btn-secondary btn-sm">
-              <LogOut size={18} />
               Logout
             </button>
           </div>
@@ -388,7 +371,6 @@ const Dashboard = () => {
             </div>
             <div className="stats">
               <div className="stat-card">
-                <Package size={24} color="#667eea" />
                 <div>
                   <div className="stat-value">{products.length}</div>
                   <div className="stat-label">Competitors Tracked</div>
@@ -411,7 +393,6 @@ const Dashboard = () => {
 
           <div className="add-product-section card">
             <h3>
-              <Plus size={24} />
               Add Competitor Product
             </h3>
             <form onSubmit={handleAddProduct} className="add-product-form">
@@ -428,17 +409,7 @@ const Dashboard = () => {
                 className="btn btn-primary"
                 disabled={addingProduct}
               >
-                {addingProduct ? (
-                  <>
-                    <Loader size={20} className="spinning" />
-                    Adding...
-                  </>
-                ) : (
-                  <>
-                    <Plus size={20} />
-                    Track Competitor
-                  </>
-                )}
+                {addingProduct ? 'Adding...' : 'Track Competitor'}
               </button>
             </form>
           </div>
@@ -450,7 +421,6 @@ const Dashboard = () => {
             </div>
           ) : products.length === 0 ? (
             <div className="empty-state">
-              <Package size={64} color="#9ca3af" />
               <h3>No competitors tracked yet</h3>
               <p>Add your first competitor product to start monitoring their pricing strategy</p>
             </div>
@@ -473,7 +443,7 @@ const Dashboard = () => {
                       <span className="platform-badge">{product.platform}</span>
                       {isJharkhandEcom && (
                         <span className="auto-refresh-badge" title="Auto-refreshing every 5 seconds">
-                          <RefreshCw size={12} className="spinning-slow" /> Auto
+                          Auto
                         </span>
                       )}
                       <h3 className="product-title">{product.title}</h3>
@@ -481,9 +451,9 @@ const Dashboard = () => {
                     
                     {showAlert && (
                       <div className="price-alert">
-                        <span className="alert-icon">🔔</span>
+                        <span className="alert-icon" aria-hidden="true"></span>
                         <div className="alert-content">
-                          <strong>{priceAlert.newPrice < priceAlert.oldPrice ? 'Competitor Dropped Price!' : 'Competitor Raised Price!'}</strong>
+                          <strong>{priceAlert.newPrice < priceAlert.oldPrice ? 'Competitor Dropped Price' : 'Competitor Raised Price'}</strong>
                           <div className="price-comparison">
                             <span className="old-price">{formatPrice(priceAlert.oldPrice, product.currency)}</span>
                             <span className="arrow">→</span>
@@ -497,7 +467,7 @@ const Dashboard = () => {
                               onClick={() => handleAIAction(product, priceAlert)}
                               title="Get AI competitive strategy to protect your business"
                             >
-                              <Sparkles size={14} /> Take Action
+                              Take Action
                             </button>
                           </div>
                         </div>
@@ -505,7 +475,6 @@ const Dashboard = () => {
                     )}
                     
                     <div className="product-price">
-                      <IndianRupee size={24} color="#10b981" />
                       <div>
                         <div className="price-current">
                           {formatPrice(product.currentPrice, product.currency)}
@@ -532,7 +501,6 @@ const Dashboard = () => {
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
                       >
-                        <ExternalLink size={16} />
                         View
                       </a>
                       <button
@@ -540,19 +508,13 @@ const Dashboard = () => {
                         className="btn btn-secondary btn-sm"
                         disabled={refreshingId === product._id}
                       >
-                        {refreshingId === product._id ? (
-                          <Loader size={16} className="spinning" />
-                        ) : (
-                          <RefreshCw size={16} />
-                        )}
-                        Refresh
+                        {refreshingId === product._id ? 'Refreshing...' : 'Refresh'}
                       </button>
                       <button
                         onClick={() => handleDownloadCSV(product._id, product.title)}
                         className="btn btn-secondary btn-sm"
                         title="Download 180 days price data"
                       >
-                        <Download size={16} />
                         CSV
                       </button>
                       <button
@@ -560,14 +522,12 @@ const Dashboard = () => {
                         className="btn btn-success btn-sm"
                         title="Download AI-ready weekly summary"
                       >
-                        <FileText size={16} />
                         Summary
                       </button>
                       <button
                         onClick={() => handleDeleteProduct(product._id)}
                         className="btn btn-danger btn-sm"
                       >
-                        <Trash2 size={16} />
                         Delete
                       </button>
                     </div>
@@ -586,7 +546,6 @@ const Dashboard = () => {
           <div className="modal-content ai-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title">
-                <Sparkles size={24} color="#667eea" />
                 <h2>Competitive Strategy Analysis</h2>
               </div>
               <button 
@@ -594,7 +553,7 @@ const Dashboard = () => {
                 onClick={() => setAiModalOpen(false)}
                 aria-label="Close modal"
               >
-                <X size={24} />
+                Close
               </button>
             </div>
             
@@ -607,7 +566,6 @@ const Dashboard = () => {
             
             <div className="rag-indicator">
               <div className="rag-badge">
-                <FileText size={16} />
                 <span>Analyzing 180-day price history with RAG system</span>
               </div>
             </div>
@@ -615,10 +573,10 @@ const Dashboard = () => {
             <div className="modal-body">
               {aiLoading && (
                 <div className="ai-loading">
-                  <Loader size={32} className="spinning" />
-                  <p>🔍 Loading competitor's 180-day price summary...</p>
-                  <p className="rag-status">📊 RAG system processing historical data...</p>
-                  <p className="rag-status">🤖 AI analyzing competitive strategy...</p>
+                  <div className="spinner"></div>
+                  <p>Loading competitor's 180-day price summary...</p>
+                  <p className="rag-status">RAG system processing historical data...</p>
+                  <p className="rag-status">AI analyzing competitive strategy...</p>
                 </div>
               )}
               
@@ -653,7 +611,6 @@ const Dashboard = () => {
                   rel="noopener noreferrer"
                   className="btn btn-primary"
                 >
-                  <ExternalLink size={18} />
                   View Competitor Product
                 </a>
               )}
