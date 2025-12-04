@@ -2,10 +2,21 @@ import express from 'express';
 import Product from '../models/Product.js';
 import auth from '../middleware/auth.js';
 import { scrapeProductPrice } from '../utils/scraper.js';
-import { Ollama } from 'ollama';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+// Initialize Google's Gemini API
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '', {
+  apiVersion: "v1",
+});
 
 const router = express.Router();
-const ollama = new Ollama({ host: 'http://localhost:11434' });
 
 // Get all products for user
 router.get('/', auth, async (req, res) => {
@@ -419,7 +430,7 @@ router.post('/:id/ai-action', auth, async (req, res) => {
     const priceChangePercent = ((priceChange / oldPrice) * 100).toFixed(2);
     const changeType = priceChange < 0 ? 'decreased' : 'increased';
     
-    // Create prompt for Ollama
+    // Create a clean, professional prompt for the AI
     const prompt = `You are a competitive pricing strategist for e-commerce sellers. A seller is monitoring their competitor's product price changes to protect their market position and prevent losses.
 
 COMPETITOR PRICE CHANGE DETECTED:
@@ -434,57 +445,80 @@ COMPETITOR'S 180-DAY PRICE HISTORY (RAG DATA):
 ${ragContext}
 
 YOUR ROLE:
-As a seller tracking this competitor, analyze their pricing strategy and provide actionable recommendations to protect your business and prevent losses.
+As a seller tracking this competitor, analyze their pricing strategy and provide actionable recommendations to protect your business and prevent losses. Use a professional and analytical tone. Format your response using standard markdown lists with bullet points or numbered lists.
 
 PROVIDE STRATEGIC ANALYSIS:
 
-1. **🚨 Immediate Action**: What should the seller do RIGHT NOW to respond to this competitor move?
+1.  **Immediate Action**: What should the seller do RIGHT NOW to respond to this competitor move?
 
-2. **📊 Competitive Analysis**: What is the competitor's pricing strategy? Are they aggressive, defensive, or following seasonal patterns?
+2.  **Competitive Analysis**: What is the competitor's pricing strategy? Are they aggressive, defensive, or following seasonal patterns?
 
-3. **💰 Pricing Strategy**: Should the seller:
-   - Match this price?
-   - Undercut the competitor?
-   - Maintain current pricing?
-   - Adjust by how much?
+3.  **Pricing Strategy**: Should the seller:
+    - Match this price?
+    - Undercut the competitor?
+    - Maintain current pricing?
+    - Adjust by how much?
 
-4. **⚠️ Risk Assessment**: 
-   - What happens if the seller doesn't respond?
-   - What are the risks of matching/undercutting?
-   - Potential profit loss scenarios
+4.  **Risk Assessment**: 
+    - What happens if the seller doesn't respond?
+    - What are the risks of matching/undercutting?
+    - Potential profit loss scenarios
 
-5. **🔮 Competitor Prediction**: Based on 180-day history, what will the competitor likely do next?
+5.  **Competitor Prediction**: Based on 180-day history, what will the competitor likely do next?
 
-6. **✅ Action Plan**: Clear step-by-step recommendations to protect market share and minimize losses.
+6.  **Action Plan**: Clear step-by-step recommendations to protect market share and minimize losses.
 
 Keep your response focused on SELLER ACTIONS to compete effectively. Be specific with pricing recommendations.`;
 
-    console.log('Sending request to Ollama...');
+    console.log('Sending request to Gemini...');
     
-    // Stream response from Ollama
+    // Set up response headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    if (!process.env.GEMINI_API_KEY) {
+      res.write(`data: ${JSON.stringify({ error: 'Server is missing GOOGLE_API_KEY. Set it in server/.env or environment.' })}\n\n`);
+      return res.end();
+    }
     
     try {
-      const stream = await ollama.chat({
-        model: 'llama3.2',
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
+      // Get the Gemini Pro model
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+      
+      // Start a chat session
+      const chat = model.startChat({
+        history: [
+          {
+            role: 'user',
+            parts: [{ text: 'You are a competitive pricing strategist for e-commerce sellers. Provide clear, actionable advice based on the provided data.' }],
+          },
+          {
+            role: 'model',
+            parts: [{ text: 'I understand. I will analyze the pricing data and provide strategic recommendations to help you compete effectively.' }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 1000,
+          temperature: 0.7,
+        },
       });
 
-      for await (const chunk of stream) {
-        if (chunk.message && chunk.message.content) {
-          res.write(`data: ${JSON.stringify({ content: chunk.message.content })}\n\n`);
-        }
+      // Send the prompt and stream the response
+      const result = await chat.sendMessageStream(prompt);
+      let fullResponse = '';
+
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullResponse += chunkText;
+        res.write(`data: ${JSON.stringify({ content: chunkText })}\n\n`);
       }
       
+      console.log('Gemini response completed');
       res.write('data: [DONE]\n\n');
       res.end();
-      console.log('AI response streaming completed');
-    } catch (ollamaError) {
-      console.error('Ollama error:', ollamaError);
-      res.write(`data: ${JSON.stringify({ error: 'Ollama service unavailable. Please ensure Ollama is running with llama3.2 model.' })}\n\n`);
+    } catch (error) {
+      console.error('Gemini API error:', error);
+      res.write(`data: ${JSON.stringify({ error: `Gemini API Error: ${error.message}` })}\n\n`);
       res.end();
     }
     

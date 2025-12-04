@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import './Dashboard.css';
@@ -66,7 +67,7 @@ const Dashboard = () => {
       jharkhandProducts.forEach(product => {
         autoRefreshProduct(product._id, product.currentPrice);
       });
-    }, 5000); // 5 seconds
+    }, 10000); // 10 seconds
 
     return () => clearInterval(intervalId);
   }, [products]);
@@ -583,9 +584,7 @@ const Dashboard = () => {
               {aiResponse && (
                 <div className="ai-response">
                   <div className="response-content">
-                    {aiResponse.split('\n').map((line, index) => (
-                      <p key={index}>{line}</p>
-                    ))}
+                    <ReactMarkdown>{aiResponse}</ReactMarkdown>
                   </div>
                 </div>
               )}

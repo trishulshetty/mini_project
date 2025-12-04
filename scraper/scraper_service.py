@@ -24,13 +24,9 @@ app = Flask(__name__)
 CORS(app)
 
 # ================= CONFIG ================= #
-# Add your own proxies here if needed (optional)
-PROXIES = [
-    # Example: "http://username:password@host:port"
-    # Leave empty to use direct connection with Selenium
-]
-
-SCRAPERAPI_KEY = None  # Set to your API key if you have one
+# Direct connection only - proxies removed to reduce overhead
+PROXIES = []
+SCRAPERAPI_KEY = None
 # ========================================== #
 
 def detect_platform(url):
@@ -65,24 +61,7 @@ def scrape_with_requests(url, platform):
         "Upgrade-Insecure-Requests": "1"
     }
 
-    # Try with proxies if available
-    if PROXIES:
-        for attempt in range(min(3, len(PROXIES))):
-            proxy = random.choice(PROXIES)
-            try:
-                print(f"[Attempt {attempt+1}] Using proxy: {proxy}")
-                resp = requests.get(url, headers=headers, proxies={"http": proxy, "https": proxy}, timeout=120)
-                if "captcha" in resp.text.lower() or "access denied" in resp.text.lower():
-                    print("Blocked by CAPTCHA, rotating proxy...")
-                    continue
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    return parse_html(soup, platform)
-            except Exception as e:
-                print(f"Proxy {proxy} failed: {e}")
-                continue
-    
-    # Try direct connection (no proxy)
+    # Try direct connection
     try:
         print("Trying direct connection...")
         resp = requests.get(url, headers=headers, timeout=120)
