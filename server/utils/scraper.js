@@ -12,7 +12,7 @@ const scrapeProductPrice = async (url) => {
     const response = await axios.post(`${PYTHON_SCRAPER_URL}/scrape`, {
       url: url
     }, {
-      timeout: 30000, // 30 second timeout for Selenium
+      timeout: 120000, // 120 second timeout for Selenium
       headers: {
         'Content-Type': 'application/json'
       }
