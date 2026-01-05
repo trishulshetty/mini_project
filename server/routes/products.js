@@ -3,7 +3,7 @@ import Product from '../models/Product.js';
 import auth from '../middleware/auth.js';
 import { scrapeProductPrice } from '../utils/scraper.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
+import dotenv from 'dotenv';  
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,10 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Initialize Google's Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '', {
-  apiVersion: "v1",
-});
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const router = express.Router();
 
@@ -431,7 +429,7 @@ router.post('/:id/ai-action', auth, async (req, res) => {
     const changeType = priceChange < 0 ? 'decreased' : 'increased';
     
     // Create a clean, professional prompt for the AI
-    const prompt = `You are a competitive pricing strategist for e-commerce sellers. A seller is monitoring their competitor's product price changes to protect their market position and prevent losses.
+    const prompt = `You are a senior competitive pricing strategist for e-commerce sellers. A seller is monitoring their competitor's product price changes to protect their market position and prevent losses.
 
 COMPETITOR PRICE CHANGE DETECTED:
 - Competitor Product: ${product.title}
@@ -444,47 +442,78 @@ COMPETITOR PRICE CHANGE DETECTED:
 COMPETITOR'S 180-DAY PRICE HISTORY (RAG DATA):
 ${ragContext}
 
-YOUR ROLE:
-As a seller tracking this competitor, analyze their pricing strategy and provide actionable recommendations to protect your business and prevent losses. Use a professional and analytical tone. Format your response using standard markdown lists with bullet points or numbered lists.
+YOUR TASK:
+- Analyze the competitor's pricing move using the history above.
+- Recommend a clear, practical strategy for the seller to protect profit and market share.
+- Focus on specific pricing and action recommendations, not generic theory.
 
-PROVIDE STRATEGIC ANALYSIS:
+OUTPUT FORMAT (IMPORTANT):
+- Respond in clean, professional **Markdown**.
+- Begin with a heading "## Overview" followed by **4–6 bullet points only** (no paragraphs).
+- The Overview bullets together should be around **80–120 words total** (roughly ~100 words), summarizing the situation and your high-level strategy.
+- Then use clear section headings in this order:
+  - ## Immediate Action
+  - ## Competitive Analysis
+  - ## Pricing Strategy
+  - ## Risk Assessment
+  - ## Competitor Prediction
+  - ## Action Plan (Step-by-Step)
+  - ## Long-Term Strategy (30–90 Days)
+- Under each heading, use bullet points where each bullet looks like: **Short Title**: detailed explanation (1–2 sentences, around 20–30 words) with concrete, actionable guidance.
+- Overall, provide a pointwise, detailed strategy rather than very short or generic bullets.
 
-1.  **Immediate Action**: What should the seller do RIGHT NOW to respond to this competitor move?
+CONTENT TO PROVIDE UNDER EACH HEADING:
 
-2.  **Competitive Analysis**: What is the competitor's pricing strategy? Are they aggressive, defensive, or following seasonal patterns?
+## Immediate Action
+- **Current Situation**: Briefly restate what just happened with the competitor price.
+- **Immediate Response**: What should the seller do right now about their price (match, undercut, hold, or increase)? Include a suggested percentage or rupee range.
 
-3.  **Pricing Strategy**: Should the seller:
-    - Match this price?
-    - Undercut the competitor?
-    - Maintain current pricing?
-    - Adjust by how much?
+## Competitive Analysis
+- **Competitor Behaviour**: Describe whether the competitor appears aggressive, defensive, experimenting, or seasonal.
+- **Historical Pattern Insight**: Use the 180-day history to infer patterns (sales events, end-of-month, weekend spikes, etc.).
 
-4.  **Risk Assessment**: 
-    - What happens if the seller doesn't respond?
-    - What are the risks of matching/undercutting?
-    - Potential profit loss scenarios
+## Pricing Strategy
+- **Recommended Positioning**: Explain if the seller should aim to be cheaper, equal, or slightly more expensive and why.
+- **Adjustment Guidance**: Suggest how much to move the price (in % or ₹ range) and how quickly, considering margins and demand.
 
-5.  **Competitor Prediction**: Based on 180-day history, what will the competitor likely do next?
+## Risk Assessment
+- **No-Action Risk**: What happens if the seller does nothing?
+- **Aggressive Response Risk**: Risks of deep undercutting or frequent changes (price wars, margin erosion).
+- **Operational Risks**: Mention stock, cash flow, or customer perception risks.
 
-6.  **Action Plan**: Clear step-by-step recommendations to protect market share and minimize losses.
+## Competitor Prediction
+- **Short-Term Outlook**: Based on the last 180 days, what is the competitor likely to do in the next 7–14 days?
+- **Medium-Term Outlook**: Any patterns or triggers (festivals, salary dates, seasonality) that might change their pricing.
 
-Keep your response focused on SELLER ACTIONS to compete effectively. Be specific with pricing recommendations.`;
+## Action Plan (Step-by-Step)
+- **Step 1**: Immediate pricing action (with specific target range).
+- **Step 2**: Monitoring plan for the next few days (what to watch, how often).
+- **Step 3**: Rules for automatic adjustments if prices move again.
+- **Step 4**: Non-price levers (bundles, coupons, delivery, returns) the seller can use.
 
-    console.log('Sending request to Gemini...');
-    
+## Long-Term Strategy (30–90 Days)
+- **Positioning Strategy**: How the seller should position on price vs value over the next 1–3 months.
+- **Playbook for Repeated Patterns**: How to respond if this competitor behaviour repeats.
+- **Data & Experimentation**: What data to track (conversion, margins, price index) and what tests to run to refine the strategy.
+
+Keep your response tightly focused on **specific seller actions**, with bolded bullet titles and neat, easy-to-follow structure.`;
+
+    console.log('Sending request to LLM...');
+
     // Set up response headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+
     if (!process.env.GEMINI_API_KEY) {
-      res.write(`data: ${JSON.stringify({ error: 'Server is missing GOOGLE_API_KEY. Set it in server/.env or environment.' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: 'Server is missing API_KEY. Set it in server/.env or environment.' })}\n\n`);
       return res.end();
     }
-    
+
     try {
-      // Get the Gemini Pro model
-      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
-      
+     
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+
       // Start a chat session
       const chat = model.startChat({
         history: [
@@ -498,7 +527,8 @@ Keep your response focused on SELLER ACTIONS to compete effectively. Be specific
           },
         ],
         generationConfig: {
-          maxOutputTokens: 1000,
+          // Allow a longer response so the model can complete all sections
+          maxOutputTokens: 4096,
           temperature: 0.7,
         },
       });
@@ -512,13 +542,13 @@ Keep your response focused on SELLER ACTIONS to compete effectively. Be specific
         fullResponse += chunkText;
         res.write(`data: ${JSON.stringify({ content: chunkText })}\n\n`);
       }
-      
-      console.log('Gemini response completed');
+
+      console.log('response completed. Total characters:', fullResponse.length);
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
-      console.error('Gemini API error:', error);
-      res.write(`data: ${JSON.stringify({ error: `Gemini API Error: ${error.message}` })}\n\n`);
+      console.error('error:', error);
+      res.write(`data: ${JSON.stringify({ error: `API Error: ${error.message}` })}\n\n`);
       res.end();
     }
     
